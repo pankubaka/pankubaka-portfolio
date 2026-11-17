@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Panel prac — Pan KuBaka</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Silkscreen&display=swap">
+<style>
+:root{
+  --bg:#15100E; --bg-2:#1F1714; --bg-3:#2A1F1B; --line:#3A2C26;
+  --fg:#F3E9DC; --muted:#B9A796; --red:#E2312B; --coin:#FFC93C; --teal:#3FC1B0; --ok:#5BD08A;
+  --f-display:"Bungee","Impact","Arial Black",sans-serif;
+  --f-body:"Bricolage Grotesque","Segoe UI",system-ui,sans-serif;
+  --f-pixel:"Silkscreen","Courier New",monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:400 16px/1.5 var(--f-body);-webkit-font-smoothing:antialiased}
+.wrap{max-width:900px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+:focus-visible{outline:3px solid var(--coin);outline-offset:2px}
+.pix{font-family:var(--f-pixel);font-size:12px;letter-spacing:.08em;text-transform:uppercase}
+h1{font-family:var(--f-display);font-weight:400;font-size:clamp(28px,5vw,40px);margin:0;line-height:1}
+label{display:block}
+.lab{font-family:var(--f-pixel);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+input,select,textarea{width:100%;font:inherit;color:var(--fg);background:var(--bg);border:2px solid var(--line);padding:9px 11px;border-radius:0}
+input:focus,select:focus,textarea:focus{border-color:var(--coin);outline:none}
+textarea{min-height:110px;resize:vertical}
+.btn{font-family:var(--f-pixel);text-transform:uppercase;font-size:12px;letter-spacing:.06em;padding:11px 16px;border:2px solid var(--fg);background:transparent;color:var(--fg);cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:8px}
+.btn:hover{border-color:var(--coin);color:var(--coin)}
+.btn.primary{background:var(--red);border-color:var(--red);color:var(--fg);box-shadow:4px 4px 0 var(--coin)}
+.btn.primary:hover{color:var(--fg);filter:brightness(1.1)}
+.btn:disabled{opacity:.5;cursor:default}
+.icon{width:36px;height:36px;padding:0;justify-content:center;border-color:var(--line);font-size:16px}
+
+header{padding-block:28px 20px;border-bottom:2px solid var(--line)}
+header .wrap{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+header .pix{color:var(--teal);display:block;margin-bottom:8px}
+
+#login{padding-block:60px}
+#login form{max-width:380px;display:grid;gap:14px}
+.msg{min-height:1.5em;font-size:15px}
+.msg.err{color:var(--red)} .msg.ok{color:var(--ok)}
+
+.add{padding-block:28px;display:grid;gap:12px}
+.add .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.hint{color:var(--muted);font-size:14px;margin:0}
+
+.list{display:grid;gap:12px;padding-bottom:140px}
+.count{color:var(--muted)}
+.item{display:grid;grid-template-columns:150px 1fr auto;gap:16px;background:var(--bg-2);border:2px solid var(--line);padding:12px;align-items:start}
+.item.new{border-color:var(--teal)}
+.thumb{position:relative;aspect-ratio:16/9;background:var(--bg-3);overflow:hidden;max-width:100%}
+.thumb.v{aspect-ratio:9/16;width:min(100%,112px);margin:0 auto}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb .badge{position:absolute;left:6px;top:6px;font-family:var(--f-pixel);font-size:10px;background:var(--bg);color:var(--coin);border:1px solid var(--coin);padding:2px 5px}
+.thumb .none{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-family:var(--f-pixel);font-size:11px;text-align:center;padding:8px}
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:10px;min-width:0}
+.fields .full{grid-column:1/-1}
+.fields .url{font-size:13px;color:var(--muted);word-break:break-all}
+.fields .url a{color:inherit}
+.tools{display:flex;flex-direction:column;gap:6px}
+@media (max-width:640px){
+  .item{grid-template-columns:1fr}
+  .thumb{max-width:260px}
+  .fields{grid-template-columns:1fr}
+  .tools{flex-direction:row}
+}
+.empty{border:2px dashed var(--line);padding:28px;text-align:center;color:var(--muted)}
+
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--bg-2);border-top:2px solid var(--line);z-index:5;
+  padding-bottom:env(safe-area-inset-bottom,0px)}
+.bar .wrap{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding-block:12px}
+.dirty{color:var(--coin)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div>
+      <span class="pix">Pan KuBaka · Panel</span>
+      <h1>Twoje prace</h1>
+    </div>
+    <a class="btn" href="/" target="_blank" rel="noopener">Zobacz stronę ↗</a>
+  </div>
+</header>
+
+<main>
+  <section id="login" class="wrap">
+    <form id="loginForm">
+      <label><span class="lab">Hasło</span><input id="pass" type="password" autocomplete="current-password" required></label>
+      <button class="btn primary" type="submit">Zaloguj</button>
+      <p class="msg" id="loginMsg" role="status"></p>
+    </form>
+  </section>
+
+  <div id="app" hidden>
+    <section class="wrap add">
+      <label for="links"><span class="lab">Wklej linki, jeden pod drugim</span></label>
+      <textarea id="links" placeholder="https://www.youtube.com/watch?v=...&#10;https://www.instagram.com/reel/...&#10;https://www.tiktok.com/@pankubaka/video/..."></textarea>
+      <div class="row">
+        <button class="btn primary" type="button" id="addBtn">Dodaj na górę listy</button>
+        <p class="hint">YouTube, Shorts, Instagram, TikTok i Vimeo. Tytuły z YouTube'a, TikToka i Vimeo uzupełnią się same.</p>
+      </div>
+      <p class="msg" id="addMsg" role="status"></p>
+    </section>
+
+    <section class="wrap">
+      <p class="pix count" id="count"></p>
+      <div class="list" id="list"></div>
+    </section>
+  </div>
+</main>
+
+<div class="bar" id="bar" hidden>
+  <div class="wrap">
+    <span class="msg" id="saveMsg" role="status"></span>
+    <button class="btn primary" type="button" id="saveBtn">Zapisz i opublikuj</button>
+  </div>
+</div>
+
+<script>
+const CATS = { rolki:"Rolki", filmy:"Filmy", wywiady:"Wywiady", eventy:"Eventy" };
+let works = [], dirty = false, password = "";
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* to samo rozpoznawanie linków co na stronie głównej */
+function parse(url){
+  let u; try{ u = new URL(url.trim()) }catch{ return null }
+  const h = u.hostname.replace(/^www\.|^m\./,"");
+  const path = u.pathname.split("/").filter(Boolean);
+  const yt = (id, short) => id ? { platform: short ? "YT Shorts" : "YouTube", vertical: short, thumb:`https://i.ytimg.com/vi/${id}/hqdefault.jpg` } : null;
+  if (h === "youtu.be") return yt(path[0], false);
+  if (h.endsWith("youtube.com")){
+    if (path[0] === "shorts") return yt(path[1], true);
+    if (path[0] === "embed") return yt(path[1], false);
+    return yt(u.searchParams.get("v"), false);
+  }
+  if (h === "instagram.com" && path.some(p => ["reel","reels","p","tv"].includes(p))) return { platform:"Instagram", vertical:true };
+  if (h.endsWith("tiktok.com") && path.includes("video")) return { platform:"TikTok", vertical:true };
+  if ((h === "vimeo.com" || h === "player.vimeo.com") && path.some(p => /^\d+$/.test(p))) return { platform:"Vimeo", vertical:false };
+  return null;
+}
+
+async function api(action, extra = {}){
+  const r = await fetch("/api/works", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json", "x-admin-password": password },
+    body: JSON.stringify({ action, ...extra })
+  });
+  let d = {}; try{ d = await r.json() }catch{}
+  if (!r.ok) throw new Error(d.error || `Błąd ${r.status}`);
+  return d;
+}
+
+/* ---------- logowanie ---------- */
+$("loginForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  password = $("pass").value;
+  $("loginMsg").className = "msg"; $("loginMsg").textContent = "Sprawdzam…";
+  try{
+    await api("check");
+    try{ sessionStorage.setItem("pk-pass", password) }catch{}
+    await start();
+  }catch(err){
+    $("loginMsg").className = "msg err"; $("loginMsg").textContent = err.message;
+  }
+});
+async function start(){
+  const d = await api("load");
+  works = d.works || [];
+  $("login").hidden = true; $("app").hidden = false; $("bar").hidden = false;
+  setDirty(false); draw();
+}
+(async () => {
+  let saved = ""; try{ saved = sessionStorage.getItem("pk-pass") || "" }catch{}
+  if (!saved) return;
+  password = saved;
+  try{ await start() }catch{ password = "" }
+})();
+
+/* ---------- lista ---------- */
+function draw(){
+  $("count").textContent = works.length ? `${works.length} ${works.length === 1 ? "praca" : works.length < 5 ? "prace" : "prac"} · kolejność jak na stronie` : "";
+  if (!works.length){
+    $("list").innerHTML = `<div class="empty">Lista jest pusta. Wklej pierwszy link powyżej.<br>Dopóki nic tu nie zapiszesz, strona pokazuje przykładowe prace z kodu.</div>`;
+    return;
+  }
+  $("list").innerHTML = works.map((w, i) => {
+    const v = parse(w.url) || { platform:"?", vertical:false };
+    const img = w.okladka || v.thumb;
+    return `<article class="item${w._new ? " new" : ""}" data-i="${i}">
+      <div class="thumb${v.vertical ? " v" : ""}">
+        ${img ? `<img src="${esc(img)}" alt="" loading="lazy">` : `<span class="none">brak miniatury</span>`}
+        <span class="badge">${v.platform}</span>
+      </div>
+      <div class="fields">
+        <label class="full"><span class="lab">Tytuł</span><input id="t-${i}" data-f="tytul" value="${esc(w.tytul)}" placeholder="${w._loading ? "Pobieram tytuł…" : "Tytuł na karcie"}"></label>
+        <label><span class="lab">Klient</span><input id="k-${i}" data-f="klient" value="${esc(w.klient)}" placeholder="np. ENDORFY"></label>
+        <label><span class="lab">Kategoria</span><select id="c-${i}" data-f="kategoria">${Object.entries(CATS).map(([k,l]) => `<option value="${k}"${w.kategoria === k ? " selected" : ""}>${l}</option>`).join("")}</select></label>
+        <label class="full"><span class="lab">Własna miniatura (link do obrazka, opcjonalnie)</span><input id="o-${i}" data-f="okladka" value="${esc(w.okladka)}" placeholder="https://…/okladka.jpg"></label>
+        <span class="url full"><a href="${esc(w.url)}" target="_blank" rel="noopener">${esc(w.url)}</a></span>
+      </div>
+      <div class="tools">
+        <button class="btn icon" type="button" data-a="up" aria-label="Przesuń wyżej" ${i === 0 ? "disabled" : ""}>↑</button>
+        <button class="btn icon" type="button" data-a="down" aria-label="Przesuń niżej" ${i === works.length - 1 ? "disabled" : ""}>↓</button>
+        <button class="btn icon" type="button" data-a="del" aria-label="Usuń">✕</button>
+      </div>
+    </article>`;
+  }).join("");
+}
+$("list").addEventListener("input", e => {
+  const f = e.target.dataset.f; if (!f) return;
+  const i = +e.target.closest(".item").dataset.i;
+  works[i][f] = e.target.value; setDirty(true);
+  if (f === "okladka") { clearTimeout(window._t); window._t = setTimeout(draw, 600); }
+});
+$("list").addEventListener("change", e => { if (e.target.tagName === "SELECT") draw(); });
+$("list").addEventListener("click", e => {
+  const b = e.target.closest("[data-a]"); if (!b) return;
+  const i = +b.closest(".item").dataset.i, a = b.dataset.a;
+  if (a === "up" && i > 0) [works[i-1], works[i]] = [works[i], works[i-1]];
+  if (a === "down" && i < works.length - 1) [works[i+1], works[i]] = [works[i], works[i+1]];
+  if (a === "del") works.splice(i, 1);
+  setDirty(true); draw();
+});
+
+/* ---------- dodawanie linków ---------- */
+$("addBtn").addEventListener("click", () => {
+  const lines = $("links").value.split(/\s+/).map(s => s.trim()).filter(Boolean);
+  const known = new Set(works.map(w => w.url));
+  const added = [], bad = [];
+  for (const url of lines){
+    const v = parse(url);
+    if (!v){ bad.push(url); continue }
+    if (known.has(url)) continue;
+    known.add(url);
+    added.push({ url, tytul:"", klient:"", kategoria: v.vertical ? "rolki" : "filmy", okladka:"", _new:true, _loading: v.platform !== "Instagram" });
+  }
+  works = [...added, ...works];
+  $("links").value = bad.join("\n");
+  $("addMsg").className = bad.length ? "msg err" : "msg ok";
+  $("addMsg").textContent = (added.length ? `Dodano ${added.length}. ` : "Nic nowego do dodania. ")
+    + (bad.length ? `Tych linków nie rozpoznaję (zostały w polu): ${bad.length}.` : "")
+    + (added.some(a => !a._loading) ? " Dla Instagrama wpisz tytuł ręcznie." : "");
+  if (added.length){ setDirty(true); draw(); }
+  added.filter(a => a._loading).forEach(async w => {
+    try{ const m = await api("meta", { url: w.url }); if (m.title && !w.tytul) w.tytul = m.title; }catch{}
+    w._loading = false;
+    const i = works.indexOf(w);
+    const inp = $(`t-${i}`);
+    if (inp && document.activeElement?.closest(".item") !== inp.closest(".item")){ inp.value = w.tytul; inp.placeholder = "Tytuł na karcie"; }
+  });
+});
+
+/* ---------- zapis ---------- */
+function setDirty(v){
+  dirty = v;
+  $("saveMsg").className = v ? "msg dirty" : "msg";
+  $("saveMsg").textContent = v ? "Masz niezapisane zmiany" : (works.length ? "Wszystko zapisane" : "");
+}
+$("saveBtn").addEventListener("click", async () => {
+  const btn = $("saveBtn"); btn.disabled = true;
+  $("saveMsg").className = "msg"; $("saveMsg").textContent = "Zapisuję…";
+  try{
+    const clean = works.map(({ url, tytul, klient, kategoria, okladka }) => ({ url, tytul, klient, kategoria, okladka }));
+    const d = await api("save", { works: clean });
+    works.forEach(w => delete w._new);
+    draw(); setDirty(false);
+    $("saveMsg").className = "msg ok";
+    $("saveMsg").textContent = `Opublikowano ${d.count}. Na stronie pojawią się w ciągu minuty.`;
+  }catch(err){
+    $("saveMsg").className = "msg err"; $("saveMsg").textContent = err.message;
+  }finally{ btn.disabled = false }
+});
+addEventListener("beforeunload", e => { if (dirty){ e.preventDefault(); e.returnValue = "" } });
+</script>
+</body>
+</html>
