@@ -64,7 +64,10 @@ async function fetchJson(url) {
   } catch { return {}; }
 }
 const decode = (s) => String(s || "")
-  .replace(/\\u0026/g, "&").replace(/\\\//g, "/")
+  .replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
+  .replace(/\\\//g, "/")
+  .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+  .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(+d))
   .replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#0?39;|&#x27;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
 const pick = (html, re) => { const m = html.match(re); return m ? decode(m[1]) : ""; };
 function og(html, prop) {

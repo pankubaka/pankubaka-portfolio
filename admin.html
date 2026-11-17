@@ -7,14 +7,14 @@
 <title>Panel prac — Pan KuBaka</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Silkscreen&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Pixelify+Sans:wght@400;500&display=swap">
 <style>
 :root{
   --bg:#15100E; --bg-2:#1F1714; --bg-3:#2A1F1B; --line:#3A2C26;
   --fg:#F3E9DC; --muted:#B9A796; --red:#E2312B; --coin:#FFC93C; --teal:#3FC1B0; --ok:#5BD08A;
   --f-display:"Bungee","Impact","Arial Black",sans-serif;
   --f-body:"Bricolage Grotesque","Segoe UI",system-ui,sans-serif;
-  --f-pixel:"Silkscreen","Courier New",monospace;
+  --f-pixel:"Pixelify Sans","Courier New",monospace;
   color-scheme:dark;
 }
 *{box-sizing:border-box}
@@ -254,13 +254,15 @@ $("addBtn").addEventListener("click", () => {
 
 /* ---------- automatyczne tytuły i miniatury ---------- */
 const isYT = w => (parse(w.url)?.platform || "").startsWith("Y");
-const missing = w => !w.tytul || (!w.okladka && !isYT(w));
+/* tytuły z kodami typu "&;" to pozostałość po starym błędzie z polskimi literami – pobieramy je od nowa */
+const broken = w => /&#?\w*;|&;/.test(w.tytul || "");
+const missing = w => !w.tytul || broken(w) || (!w.okladka && !isYT(w));
 async function fill(w){
   w._loading = true; updateItem(w);
   try{
     const m = await api("meta", { url: w.url });
     let changed = false;
-    if (m.title && !w.tytul){ w.tytul = m.title; changed = true; }
+    if (m.title && (!w.tytul || broken(w))){ w.tytul = m.title; changed = true; }
     if (m.thumb && !w.okladka){ w.okladka = m.thumb; changed = true; }
     w._note = m.note || "";
     if (changed) setDirty(true);
