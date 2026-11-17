@@ -5,11 +5,15 @@
 //   action "load"  – świeża lista z pominięciem cache
 //   action "meta"  – pobiera tytuł filmu (YouTube / Vimeo / TikTok)
 //   action "save"  – zapisuje listę {works:[...]}
-import { put, list } from "@vercel/blob";
+import { put, get } from "@vercel/blob";
 import { createHash, timingSafeEqual } from "node:crypto";
 
 const FILE = "portfolio/works.json";
 const CATS = ["rolki", "filmy", "wywiady", "eventy"];
+
+// Magazyn Blob jest prywatny i łączy się przez OIDC (BLOB_STORE_ID) – biblioteka sama się loguje.
+// Starsze magazyny z kluczem BLOB_READ_WRITE_TOKEN też działają.
+const hasBlob = () => Boolean(process.env.BLOB_STORE_ID || process.env.BLOB_READ_WRITE_TOKEN);
 
 function authorized(req) {
   const pass = process.env.ADMIN_PASSWORD;
@@ -37,12 +41,9 @@ function clean(items) {
 }
 
 async function readWorks() {
-  const { blobs } = await list({ prefix: FILE, limit: 5 });
-  const b = blobs.find((x) => x.pathname === FILE);
-  if (!b) return [];
-  const r = await fetch(`${b.url}?v=${new Date(b.uploadedAt).getTime()}`, { cache: "no-store" });
-  if (!r.ok) return [];
-  const d = await r.json();
+  const r = await get(FILE, { access: "private", useCache: false });
+  if (!r || r.statusCode !== 200 || !r.stream) return [];
+  const d = await new Response(r.stream).json();
   return Array.isArray(d) ? d : [];
 }
 
@@ -97,11 +98,10 @@ export default async function handler(req, res) {
           const works = clean(body.works);
           if (!works) return res.status(400).json({ error: "Niepoprawna lista prac." });
           await put(FILE, JSON.stringify(works), {
-            access: "public",
+            access: "private",
             addRandomSuffix: false,
             allowOverwrite: true,
             contentType: "application/json",
-            cacheControlMaxAge: 60,
           });
           return res.status(200).json({ ok: true, count: works.length });
         }
@@ -114,11 +114,11 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Metoda niedozwolona." });
   } catch (e) {
     console.error(e);
-    const noBlob = /token|BLOB_READ_WRITE_TOKEN/i.test(String(e?.message));
-    return res.status(500).json({
-      error: noBlob
-        ? "Projekt nie jest połączony z Vercel Blob. Dodaj magazyn Blob w zakładce Storage i zrób redeploy."
-        : "Błąd serwera. Szczegóły w logach funkcji na Vercelu.",
-    });
+    if (!hasBlob()) {
+      return res.status(500).json({
+        error: "Funkcja nie widzi klucza do Vercel Blob. Podłącz magazyn Blob do projektu (Storage → Connect Store, zaznacz Production) i zrób Redeploy.",
+      });
+    }
+    return res.status(500).json({ error: `Błąd Vercel Blob: ${String(e?.message || e).slice(0, 300)}` });
   }
 }
