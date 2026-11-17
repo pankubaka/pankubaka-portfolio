@@ -104,7 +104,8 @@ header .pix{color:var(--teal);display:block;margin-bottom:8px}
       <textarea id="links" placeholder="https://www.youtube.com/watch?v=...&#10;https://www.instagram.com/reel/...&#10;https://www.tiktok.com/@pankubaka/video/..."></textarea>
       <div class="row">
         <button class="btn primary" type="button" id="addBtn">Dodaj na górę listy</button>
-        <p class="hint">YouTube, Shorts, Instagram, TikTok i Vimeo. Tytuły z YouTube'a, TikToka i Vimeo uzupełnią się same.</p>
+        <button class="btn" type="button" id="fillBtn">Uzupełnij brakujące</button>
+        <p class="hint">YouTube, Shorts, Instagram, TikTok i Vimeo. Tytuły i miniatury pobierają się same.</p>
       </div>
       <p class="msg" id="addMsg" role="status"></p>
     </section>
@@ -196,7 +197,7 @@ function draw(){
     const img = w.okladka || v.thumb;
     return `<article class="item${w._new ? " new" : ""}" data-i="${i}">
       <div class="thumb${v.vertical ? " v" : ""}">
-        ${img ? `<img src="${esc(img)}" alt="" loading="lazy">` : `<span class="none">brak miniatury</span>`}
+        ${img ? `<img src="${esc(img)}" alt="" loading="lazy">` : `<span class="none">${w._loading ? "pobieram…" : esc(w._note || "brak miniatury")}</span>`}
         <span class="badge">${v.platform}</span>
       </div>
       <div class="fields">
@@ -240,22 +241,62 @@ $("addBtn").addEventListener("click", () => {
     if (!v){ bad.push(url); continue }
     if (known.has(url)) continue;
     known.add(url);
-    added.push({ url, tytul:"", klient:"", kategoria: v.vertical ? "rolki" : "filmy", okladka:"", _new:true, _loading: v.platform !== "Instagram" });
+    added.push({ url, tytul:"", klient:"", kategoria: v.vertical ? "rolki" : "filmy", okladka:"", _new:true });
   }
   works = [...added, ...works];
   $("links").value = bad.join("\n");
   $("addMsg").className = bad.length ? "msg err" : "msg ok";
   $("addMsg").textContent = (added.length ? `Dodano ${added.length}. ` : "Nic nowego do dodania. ")
     + (bad.length ? `Tych linków nie rozpoznaję (zostały w polu): ${bad.length}.` : "")
-    + (added.some(a => !a._loading) ? " Dla Instagrama wpisz tytuł ręcznie." : "");
-  if (added.length){ setDirty(true); draw(); }
-  added.filter(a => a._loading).forEach(async w => {
-    try{ const m = await api("meta", { url: w.url }); if (m.title && !w.tytul) w.tytul = m.title; }catch{}
-    w._loading = false;
-    const i = works.indexOf(w);
-    const inp = $(`t-${i}`);
-    if (inp && document.activeElement?.closest(".item") !== inp.closest(".item")){ inp.value = w.tytul; inp.placeholder = "Tytuł na karcie"; }
-  });
+    + (added.length ? " Pobieram tytuły i miniatury…" : "");
+  if (added.length){ setDirty(true); draw(); fillAll(added); }
+});
+
+/* ---------- automatyczne tytuły i miniatury ---------- */
+const isYT = w => (parse(w.url)?.platform || "").startsWith("Y");
+const missing = w => !w.tytul || (!w.okladka && !isYT(w));
+async function fill(w){
+  w._loading = true; updateItem(w);
+  try{
+    const m = await api("meta", { url: w.url });
+    let changed = false;
+    if (m.title && !w.tytul){ w.tytul = m.title; changed = true; }
+    if (m.thumb && !w.okladka){ w.okladka = m.thumb; changed = true; }
+    w._note = m.note || "";
+    if (changed) setDirty(true);
+  }catch(err){ w._note = err.message }
+  w._loading = false; updateItem(w);
+}
+async function fillAll(list){
+  const queue = [...list];
+  const worker = async () => { while (queue.length) await fill(queue.shift()); };
+  await Promise.all([worker(), worker(), worker()]);
+  const left = list.filter(missing).length;
+  $("addMsg").className = left ? "msg err" : "msg ok";
+  $("addMsg").textContent = left
+    ? `Gotowe. Przy ${left} pozycjach czegoś brakuje, uzupełnij ręcznie albo spróbuj ponownie. Pamiętaj o zapisie.`
+    : "Tytuły i miniatury pobrane. Kliknij „Zapisz i opublikuj”.";
+}
+/* odświeża jedną kartę bez przerysowania całej listy (nie gubi tego, co właśnie wpisujesz) */
+function updateItem(w){
+  const i = works.indexOf(w);
+  const el = document.querySelector(`.item[data-i="${i}"]`);
+  if (!el) return;
+  const t = $(`t-${i}`), o = $(`o-${i}`);
+  if (t){ if (document.activeElement !== t) t.value = w.tytul; t.placeholder = w._loading ? "Pobieram tytuł…" : "Tytuł na karcie"; }
+  if (o && document.activeElement !== o) o.value = w.okladka;
+  const v = parse(w.url) || { platform:"?" };
+  const img = w.okladka || v.thumb;
+  el.querySelector(".thumb").innerHTML =
+    (img ? `<img src="${esc(img)}" alt="">` : `<span class="none">${w._loading ? "pobieram…" : esc(w._note || "brak miniatury")}</span>`)
+    + `<span class="badge">${v.platform}</span>`;
+}
+$("fillBtn").addEventListener("click", () => {
+  const list = works.filter(missing);
+  $("addMsg").className = "msg";
+  if (!list.length){ $("addMsg").textContent = "Wszystkie pozycje mają tytuł i miniaturę."; return; }
+  $("addMsg").textContent = `Pobieram dane dla ${list.length} pozycji…`;
+  fillAll(list);
 });
 
 /* ---------- zapis ---------- */

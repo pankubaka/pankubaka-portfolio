@@ -3,7 +3,7 @@
 // POST /api/works  {action:...}  → wymaga nagłówka x-admin-password (zmienna ADMIN_PASSWORD na Vercelu)
 //   action "check" – sprawdza hasło
 //   action "load"  – świeża lista z pominięciem cache
-//   action "meta"  – pobiera tytuł filmu (YouTube / Vimeo / TikTok)
+//   action "meta"  – pobiera tytuł i miniaturę (YouTube / Instagram / TikTok / Vimeo)
 //   action "save"  – zapisuje listę {works:[...]}
 import { put, get } from "@vercel/blob";
 import { createHash, timingSafeEqual } from "node:crypto";
@@ -47,29 +47,116 @@ async function readWorks() {
   return Array.isArray(d) ? d : [];
 }
 
+// ---------- automatyczne tytuły i miniatury ----------
+const UA_BROWSER = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36";
+const UA_BOT = "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)";
+
+async function fetchText(url, ua) {
+  try {
+    const r = await fetch(url, { headers: { "user-agent": ua, "accept-language": "en-US,en;q=0.9,pl;q=0.8" }, redirect: "follow", signal: AbortSignal.timeout(8000) });
+    return r.ok ? await r.text() : "";
+  } catch { return ""; }
+}
+async function fetchJson(url) {
+  try {
+    const r = await fetch(url, { headers: { "user-agent": UA_BROWSER }, signal: AbortSignal.timeout(8000) });
+    return r.ok ? await r.json() : {};
+  } catch { return {}; }
+}
+const decode = (s) => String(s || "")
+  .replace(/\\u0026/g, "&").replace(/\\\//g, "/")
+  .replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#0?39;|&#x27;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
+const pick = (html, re) => { const m = html.match(re); return m ? decode(m[1]) : ""; };
+function og(html, prop) {
+  return pick(html, new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]*content=["']([^"']*)`, "i"))
+      || pick(html, new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]*(?:property|name)=["']${prop}["']`, "i"));
+}
+// Z opisu robi krótki tytuł: pierwsza linijka, bez hashtagów, max ~90 znaków.
+function tidy(text) {
+  let t = decode(text).replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, " ");
+  t = t.split("\n").map((l) => l.replace(/#[\p{L}\p{N}_]+/gu, "").replace(/\s+/g, " ").trim()).find(Boolean) || "";
+  if (t.length > 90) t = t.slice(0, 90).replace(/\s+\S*$/, "") + "…";
+  return t;
+}
+
+async function instagram(u) {
+  const parts = u.pathname.split("/").filter(Boolean);
+  const i = parts.findIndex((p) => ["reel", "reels", "p", "tv"].includes(p));
+  const code = i > -1 ? parts[i + 1] : null;
+  if (!code) return {};
+  const kind = parts[i] === "p" ? "p" : "reel";
+  let image = "", title = "";
+
+  // 1) strona osadzenia (embed) – zwykle zawiera obrazek i opis
+  const embed = await fetchText(`https://www.instagram.com/${kind}/${code}/embed/captioned/`, UA_BROWSER);
+  if (embed) {
+    image = pick(embed, /class="EmbeddedMediaImage"[^>]*?src="([^"]+)"/)
+         || pick(embed, /"display_url"\s*:\s*"([^"]+)"/)
+         || pick(embed, /"thumbnail_src"\s*:\s*"([^"]+)"/);
+    const cap = pick(embed, /class="Caption"[^>]*>([\s\S]*?)<div class="CaptionComments"/);
+    if (cap) title = tidy(cap.replace(/<a[^>]*CaptionUsername[^>]*>[\s\S]*?<\/a>/, ""));
+  }
+  // 2) zapas: tagi og: z normalnej strony (tak jak widzi to podgląd linku na Facebooku)
+  if (!image || !title) {
+    const page = await fetchText(`https://www.instagram.com/${kind}/${code}/`, UA_BOT);
+    if (page) {
+      image ||= og(page, "og:image");
+      if (!title) {
+        const raw = og(page, "og:title") || og(page, "og:description");
+        const q = raw.match(/:\s*["“]([\s\S]+)["”]\s*\.?$/);
+        title = tidy(q ? q[1] : "");
+      }
+    }
+  }
+  return { title, image };
+}
+
+async function storeThumb(imageUrl, videoUrl) {
+  if (!imageUrl) return "";
+  try {
+    const r = await fetch(imageUrl, { headers: { "user-agent": UA_BROWSER }, signal: AbortSignal.timeout(10000) });
+    const type = r.headers.get("content-type") || "";
+    if (!r.ok || !type.startsWith("image/")) return "";
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (!buf.length || buf.length > 8_000_000) return "";
+    const name = createHash("sha1").update(videoUrl).digest("hex").slice(0, 12) + "-" + Date.now().toString(36);
+    await put(`portfolio/thumbs/${name}.jpg`, buf, { access: "private", addRandomSuffix: false, allowOverwrite: true, contentType: type });
+    return `/api/thumb?f=${name}`;
+  } catch (e) {
+    console.error("thumb", e);
+    return "";
+  }
+}
+
 async function meta(url) {
   let u;
   try { u = new URL(url); } catch { return {}; }
   const host = u.hostname.replace(/^(www|m)\./, "");
-  let endpoint = null;
+
+  // YouTube: tytuł z oEmbed, miniatura bierze się sama z i.ytimg.com (stała, nie trzeba kopiować)
   if (host === "youtu.be" || host.endsWith("youtube.com")) {
     const parts = u.pathname.split("/").filter(Boolean);
     const target = parts[0] === "shorts" && parts[1] ? `https://www.youtube.com/watch?v=${parts[1]}` : url;
-    endpoint = `https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(target)}`;
-  } else if (host.endsWith("vimeo.com")) {
-    endpoint = `https://vimeo.com/api/oembed.json?url=${encodeURIComponent(url)}`;
-  } else if (host.endsWith("tiktok.com")) {
-    endpoint = `https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`;
+    const d = await fetchJson(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(target)}`);
+    return { title: decode(d.title || ""), thumb: "" };
   }
-  if (!endpoint) return {};
-  try {
-    const r = await fetch(endpoint, { signal: AbortSignal.timeout(6000) });
-    if (!r.ok) return {};
-    const d = await r.json();
-    return { title: d.title || "", author: d.author_name || "" };
-  } catch {
+
+  let title = "", image = "";
+  if (host.endsWith("vimeo.com")) {
+    const d = await fetchJson(`https://vimeo.com/api/oembed.json?width=1280&url=${encodeURIComponent(url)}`);
+    title = decode(d.title || ""); image = d.thumbnail_url || "";
+  } else if (host.endsWith("tiktok.com")) {
+    const d = await fetchJson(`https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`);
+    title = tidy(d.title || ""); image = d.thumbnail_url || "";
+  } else if (host === "instagram.com") {
+    ({ title, image } = await instagram(u));
+  } else {
     return {};
   }
+
+  const thumb = await storeThumb(image, url);
+  const note = thumb ? "" : image ? "nie udało się zapisać miniatury" : "platforma nie oddała miniatury, wklej własną";
+  return { title, thumb, note };
 }
 
 export default async function handler(req, res) {
